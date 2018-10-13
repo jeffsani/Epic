@@ -1,0 +1,20 @@
+---
+name: Epic_Hyperspace_Web
+namespace: com.citrix.adc.stylebooks
+version: "1.0"
+display-name: "Epic Hyperspace Web"
+description: "This stylebook deploys Epic Hyperspace Web on Citrix ADC in accord with published Epic best practices"
+schema-version: "1.0"
+import-stylebooks: 
+  -
+    namespace: netscaler.nitro.config
+    prefix: ns
+    version: "12.1"
+  -
+    namespace: com.citrix.adc.commontypes
+    prefix: cmtypes
+    version: "1.0"
+  -
+    namespace: com.citrix.adc.stylebooks
+    prefix: stlb
+    version: "1.0"
