@@ -1,0 +1,226 @@
+name: psjh-epic-bca-ftp-lbvserver
+description: "Epic BCA Server FTP and SSL_BRIDGE Load-Balancing - Customized for PSJH Epic StyleBooks."
+display-name: "Epic BCA Server FTP/SSL_BRIDGE LB vServer StyleBook"
+author: Nathan Joseph
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks: 
+  - 
+    namespace: netscaler.nitro.config
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters-default-sources:
+  - psjh-epic::psjh-epic-lb-helper-params
+  - psjh-epic::psjh-epic-ftp-helper-params
+  - psjh-epic::psjh-epic-wbs-helper-params
+parameters:
+  -
+    name: bca-ICInstanceName
+    label: BCA Interconnect Instance Name
+    description: "Name of the BCA Interconnect Instance utilized for Monitoring."
+    type: string
+    required: true
+substitutions:
+  bca-send:
+    true: str("GET /%{$parameters.WBSapp}%/Health?env=%{$parameters.WBSenv}%")
+    false: str("GET /%{$parameters.WBSapp}%/ACWebBlobService.ashx?env=%{$parameters.WBSenv}%")
+  bca-recv:
+    true: str("OK-WBS")
+    false: str("%{$parameters.WBSenv}%, is configured correctly")
+components:
+  -
+    name: bca-server-members
+    type: ns::server
+    repeat: $parameters.svc-servers
+    repeat-item: server
+    repeat-condition: $server.add-server
+    properties:
+      name: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+      ipaddress: $server.ip
+  -
+    name: bca-FTPIPWhitelist-Dataset
+    condition: $parameters.FTPWhitelistIPs
+    type: ns::policydataset
+    properties:
+        name: str("dataset_BCA_%{$parameters.AppDescription}%_IP_Whitelist")
+        type: str("ipv4")
+    components:
+      -
+        name: bca-FTPIPWhitelist-DatasetBindings
+        type: ns::policydataset_value_binding
+        repeat:
+          repeat-list: $parameters.FTPWhitelistIPs
+          repeat-item: ip
+        properties:
+          name: $parent.properties.name
+          value: str("%{$ip}%")
+      -
+        name: bca-FTPIPWhitelist-ResponderPolicy
+        type: ns::responderpolicy
+        properties:
+          name: str("resppol_BCA_%{$parameters.AppDescription}%_IP_Whitelist")
+          rule: str("!(CLIENT.IP.SRC.TYPECAST_TEXT_T.CONTAINS_ANY(\"%{$parent.properties.name}%\"))")
+          action: str("DROP")
+  -
+    name: bca-lbvserver-comp-ftp
+    type: ns::lbvserver
+    properties:
+        name: str("lb_BCA_%{$parameters.AppDescription}%_FTP")
+        servicetype: FTP
+        ipv46: $parameters.ip
+        port: 21
+        lbmethod: ROUNDROBIN
+        tcpprofilename?: $parameters.vserver-tcp-profile
+        comment: str("BCA FTP LB vServer Configuration - %{$parameters.AppDescription}%") 
+    components:
+      -
+        name: bca-ResponderPolicy-binding
+        type: ns::lbvserver_responderpolicy_binding
+        condition: $parameters.FTPWhitelistIPs
+        properties:
+          name: $parent.properties.name
+          policyname: $components.bca-FTPIPWhitelist-Dataset.components.bca-FTPIPWhitelist-ResponderPolicy.properties.name
+          priority: 100
+          gotopriorityexpression: str("END")
+          bindpoint: str("RESPONSE")
+      -
+        name: bca-servicegroup-comp-ftp
+        type: ns::servicegroup
+        properties:
+          servicegroupname: str("svcg_BCA_%{$parameters.AppDescription}%_FTP")
+          servicetype: FTP
+          useproxyport: str("YES")
+          tcpprofilename?: $parameters.servicegroup-tcp-profile
+          monthreshold: 3
+          comment?: str("BCA FTP LB Service Group Configuration - %{$parameters.AppDescription}%") 
+        components:
+          -
+            name: bca-lbvserver-svcg-binding-ftp
+            type: ns::lbvserver_servicegroup_binding
+            properties:
+              name: $parent.parent.properties.name
+              servicegroupname: $parent.properties.servicegroupname
+          - 
+            name: bca-svcg-ip-members-ftp
+            type: ns::servicegroup_servicegroupmember_binding
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            properties: 
+              servername: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              port: 21
+              servicegroupname: $parent.properties.servicegroupname
+  -
+    name: bca-lbvserver-comp-sslbridge
+    type: ns::lbvserver
+    properties:
+        name: str("lb_BCA_%{$parameters.AppDescription}%_SSL_BRIDGE")
+        servicetype: SSL_BRIDGE
+        ipv46: $parameters.ip
+        port: 443
+        lbmethod: ROUNDROBIN
+        persistencetype: NONE
+        tcpprofilename?: $parameters.vserver-tcp-profile
+        comment: str("BCA SSL_BRIDGE LB vServer Configuration - %{$parameters.AppDescription}%") 
+    components:
+      -
+        name: bca-servicegroup-comp-sslbridge
+        type: ns::servicegroup
+        properties:
+          servicegroupname: str("svcg_BCA_%{$parameters.AppDescription}%_SSL_BRIDGE")
+          servicetype: SSL_BRIDGE
+          downstateflush: DISABLED
+          sp: str("OFF")
+          useproxyport: str("YES")
+          tcpprofilename?: $parameters.servicegroup-tcp-profile
+          monthreshold: 2
+          comment?: str("BCA SSL_BRIDGE LB Service Group Configuration - %{$parameters.AppDescription}%") 
+        components:
+          -
+            name: bca-lbvserver-svcg-binding
+            type: ns::lbvserver_servicegroup_binding
+            properties:
+              name: $parent.parent.properties.name
+              servicegroupname: $parent.properties.servicegroupname
+          - 
+            name: bca-svcg-ip-members
+            type: ns::servicegroup_servicegroupmember_binding
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            properties: 
+              servername: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              port: 443
+              servicegroupname: $parent.properties.servicegroupname
+  -
+    name: bca-monitor-comp-ftp
+    type: ns::lbmonitor
+    properties:
+      monitorname: str("mon_BCA_%{$parameters.AppDescription}%_FTP-EXTENDED")
+      type: FTP-EXTENDED
+      scriptname: str("nsftp.pl")
+      filename: str("/") + $parameters.FTPfile
+      username?: $parameters.FTPUser
+      password?: $parameters.FTPPassword
+    components:
+      -
+        name: bca-monitor-ftpsvcg-binding-comp-ftp
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: $components.bca-lbvserver-comp-ftp.components.bca-servicegroup-comp-ftp.properties.servicegroupname
+          monitor_name: $parent.properties.monitorname
+  -
+    name: bca-monitor-comp-wbs
+    type: ns::lbmonitor
+    properties:
+      monitorname: str("mon_BCA_%{$parameters.AppDescription}%_WBS_HTTP-ECV")
+      type: HTTP-ECV
+      send: $substitutions.bca-send[$parameters.WBSmonitorVersion]
+      recv: $substitutions.bca-recv[$parameters.WBSmonitorVersion]
+      secure: str("YES")
+      destport: 443
+      interval: 30
+      resptimeout: 10
+      retries: 3
+    components:
+      -
+        name: bca-monitor-ftpsvcg-binding-comp-wbs
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: $components.bca-lbvserver-comp-ftp.components.bca-servicegroup-comp-ftp.properties.servicegroupname
+          monitor_name: $parent.properties.monitorname
+      -
+        name: bca-monitor-sslbridgesvcg-binding-comp-wbs
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: $components.bca-lbvserver-comp-sslbridge.components.bca-servicegroup-comp-sslbridge.properties.servicegroupname
+          monitor_name: $parent.properties.monitorname
+  -
+    name: bca-monitor-comp-ic
+    type: ns::lbmonitor
+    properties:
+      monitorname: str("mon_BCA_%{$parameters.AppDescription}%_IC_HTTP-ECV")
+      type: HTTP-ECV
+      send: str("GET /%{$parameters.bca-ICInstanceName}%/httplistener.ashx")
+      recv: str("ServiceRunning")
+      secure: str("YES")
+      destport: 443
+      interval: 30
+      resptimeout: 10
+      retries: 3
+    components:
+      -
+        name: bca-monitor-ftpsvcg-binding-comp-ic
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: $components.bca-lbvserver-comp-ftp.components.bca-servicegroup-comp-ftp.properties.servicegroupname
+          monitor_name: $parent.properties.monitorname
+      -
+        name: bca-monitor-sslbridgesvcg-binding-comp-ic
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: $components.bca-lbvserver-comp-sslbridge.components.bca-servicegroup-comp-sslbridge.properties.servicegroupname
+          monitor_name: $parent.properties.monitorname

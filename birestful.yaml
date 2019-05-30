@@ -1,0 +1,132 @@
+name: psjh-epic-birestful-sslbridge-lbvserver
+description: "Epic BI RESTful Server SSL_BRIDGE Load-Balancing - Customized for PSJH Epic StyleBooks."
+display-name: "Epic BI RESTful Server SSL_BRIDGE LB vServer StyleBook"
+author: Nathan Joseph
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks: 
+  - 
+    namespace: netscaler.nitro.config
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters-default-sources:
+  - psjh-epic::psjh-epic-lb-helper-params
+parameters: 
+  -
+    name: BIRESTfulEpicVersion
+    label: Epic Version
+    description: "Select the Epic Version for the BI RESTful Web Application Environment. The choice here determines how monitors will be deployed."
+    type: string
+    required: true
+    allowed-values:
+      - "August 2018 or earlier"
+      - "November 2018"
+      - "February 2019 or later"
+  -
+    name: BIRESTfulSite
+    label: BI RESTful Web Application (Epic November 2018+)
+    description: "Provide the name of the BI RESTful Web Application supported by this configuration. EX: /<BIRESTfulSite>/api/health/healthcheck - This is used for monitors in the Epic November 2018 and later releases."
+    type: string
+    required: false
+components:
+  -
+    name: birestful-lbvserver-comp
+    type: ns::lbvserver
+    properties:
+        name: str("lb_BIRESTful_%{$parameters.AppDescription}%_SSL_BRIDGE")
+        servicetype: SSL_BRIDGE
+        ipv46: $parameters.ip
+        port: 443
+        lbmethod: ROUNDROBIN
+        persistencetype: NONE
+        tcpprofilename?: $parameters.vserver-tcp-profile
+        comment: str("BIRESTful SSL_BRIDGE LB vServer Configuration - %{$parameters.AppDescription}%") 
+    components:
+      -
+        name: birestful-servicegroup-comp
+        type: ns::servicegroup
+        properties:
+          servicegroupname: str("svcg_BIRESTful_%{$parameters.AppDescription}%_SSL_BRIDGE")
+          servicetype: SSL_BRIDGE
+          downstateflush: DISABLED
+          sp: str("OFF")
+          useproxyport: str("YES")
+          tcpprofilename?: $parameters.servicegroup-tcp-profile
+          comment?: str("BIRESTful SSL_BRIDGE LB Service Group Configuration - %{$parameters.AppDescription}%") 
+        components:
+          -
+            name: birestful-lbvserver-svcg-binding
+            type: ns::lbvserver_servicegroup_binding
+            properties:
+              name: $parent.parent.properties.name
+              servicegroupname: $parent.properties.servicegroupname
+          -
+            name: birestful-server-members
+            type: ns::server
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            repeat-condition: $server.add-server
+            properties:
+              name: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              ipaddress: $server.ip
+          - 
+            name: birestful-svcg-ip-members
+            type: ns::servicegroup_servicegroupmember_binding
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            properties: 
+              servername: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              port: 443
+              servicegroupname: $parent.properties.servicegroupname
+          -
+            name: birestful-monitor-svcg-binding-comp
+            type: ns::servicegroup_lbmonitor_binding
+            condition: $parameters.BIRESTfulEpicVersion == str("August 2018 or earlier")
+            properties:
+              servicegroupname: $parent.properties.servicegroupname
+              monitor_name: str("tcp")
+  -
+    name: birestful-monitor-comp-nov2018
+    type: ns::lbmonitor
+    condition: $parameters.BIRESTfulEpicVersion == str("November 2018")
+    properties:
+      monitorname: str("mon_BIRESTful_%{$parameters.AppDescription}%_HTTP-ECV")
+      type: HTTP-ECV
+      send: str("GET /%{$parameters.BIRESTfulSite}%/api/86/health/healthcheck")
+      recv: str("{\"Status\":0}")
+      secure: str("YES")
+      interval: 30
+      resptimeout: 10
+      retries: 3
+    components:
+      -
+        name: bi-monitor-svcg-binding-comp-new
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: $components.birestful-lbvserver-comp.components.birestful-servicegroup-comp.properties.servicegroupname
+          monitor_name: $parent.properties.monitorname
+  -
+    name: birestful-monitor-comp-feb2019
+    type: ns::lbmonitor
+    condition: $parameters.BIRESTfulEpicVersion == str("February 2019 or later")
+    properties:
+      monitorname: str("mon_BIRESTful_%{$parameters.AppDescription}%_HTTP-ECV")
+      type: HTTP-ECV
+      send: str("GET /%{$parameters.BIRESTfulSite}%/api/health/healthcheck")
+      recv: str("{\"Status\":0}")
+      secure: str("YES")
+      interval: 30
+      resptimeout: 10
+      retries: 3
+    components:
+      -
+        name: bi-monitor-svcg-binding-comp-new
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: $components.birestful-lbvserver-comp.components.birestful-servicegroup-comp.properties.servicegroupname
+          monitor_name: $parent.properties.monitorname

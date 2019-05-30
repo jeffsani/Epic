@@ -1,0 +1,137 @@
+name: psjh-epic-ecp-tcp-lbvserver
+description: "Epic ECP Server TCP Load-Balancing - Customized for PSJH Epic StyleBooks."
+display-name: "Epic ECP Server TCP LB vServer StyleBook"
+author: Nathan Joseph
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0"
+import-stylebooks:                       
+  -
+    namespace: netscaler.nitro.config    
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters-default-sources:
+  - psjh-epic::psjh-epic-lb-helper-params
+parameters: 
+  -
+    name: vip-ecf-port                                                
+    type: tcp-port
+    label: Load-Balancing ECF/EpicComm Port
+    description: The ECF/EpicComm TCP Port utilized by Epic Clients for accessing the Epic ECP Servers through this configuration.
+    required: true
+  -
+    name: unix-timeout                                               
+    type: number
+    label: Unix TCP Connection Timeout (Seconds)
+    description: The TCP Connection Timeout that applies to connections defined at the Unix level. Specified in seconds.
+    required: true
+  -
+    name: cache-instances                           
+    type: object[]                               
+    label: Epic ECP Cache Instances          
+    description: Epic ECP Cache Instances and Ports utilized on the ECP Servers/LPARs.     
+    required: true
+    gui:
+      collapse_pane: true
+      columns: 3
+      updatable: true
+    parameters:                                  
+      - 
+        name: instancename                                 
+        label: Cache Instance Name
+        description: Name of the Cache Instance (PRDAPP1, PRDAPP2, etc.)  
+        type: string
+        required: true
+        gui:
+          updatable: true
+      - 
+        name: instanceport                           
+        label: Instance ECF/EpicComm Port       
+        description: The ECF/EpicComm TCP Port utilized on this specific Cache instance.
+        type: tcp-port                             
+        required: true
+        gui:
+          updatable: true
+      -
+        name: healthmonport                                                
+        type: tcp-port
+        label: Healthmon.pl Status Port
+        description: TCP Port used for checking status of Healthmon.pl on this specific Cache instance.
+        required: true
+        gui:
+          updatable: true
+substitutions:
+  conntimeout(timeout): if-then-else($timeout <= 7740,7800,$timeout + 600)
+components:
+  -
+    name: ecp-server-members
+    type: ns::server
+    repeat: $parameters.svc-servers
+    repeat-item: server
+    repeat-condition: $server.add-server
+    properties:
+      name: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+      ipaddress: $server.ip
+  -
+    name: ecp-monitors-comp
+    type: ns::lbmonitor
+    repeat:
+      repeat-list: $parameters.cache-instances
+      repeat-item: instance
+    properties:
+      monitorname: str("mon_ECP_%{$parameters.AppDescription}%_%{$instance.instancename}%_TCP%")
+      type: tcp
+      destport: $instance.healthmonport
+      interval: 5
+      resptimeout: 2
+      retries: 3
+  -
+    name: ecp-lbvserver-comp
+    type: ns::lbvserver
+    properties:
+        name: str("lb_ECP_%{$parameters.AppDescription}%_TCP")
+        servicetype: tcp
+        ipv46: $parameters.ip
+        port: $parameters.vip-ecf-port
+        lbmethod: ROUNDROBIN
+        connfailover: STATEFUL
+        clttimeout: $substitutions.conntimeout($parameters.unix-timeout)
+        downstateflush: DISABLED
+        tcpprofilename?: $parameters.vserver-tcp-profile
+        comment?: str("ECP TCP LB vServer Configuration - %{$parameters.AppDescription}%") 
+  -
+    name: ecp-services-comp
+    type: ns::service
+    repeat:
+      repeat-list: $parameters.cache-instances
+      repeat-item: instance
+      repeat:
+        repeat-list: $parameters.svc-servers
+        repeat-item: server
+    properties:
+      name: str("svc_ECP_%{$parameters.AppDescription}%_%{$instance.instancename}%_TCP")
+      servername: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+      port: $instance.instanceport
+      servicetype: tcp
+      downstateflush: DISABLED
+      tcpprofilename?: $parameters.servicegroup-tcp-profile
+      clttimeout: 9000
+      svrtimeout: 9000
+      comment?: str("ECP TP LB Service Configuration - %{$parameters.AppDescription}%") 
+    components:
+      -
+        name: ecp-services-lbmon-binding-comp
+        type: ns::service_lbmonitor_binding
+        properties:
+          name: $parent.properties.name
+          monitor_name: str("mon_ECP_%{$parameters.AppDescription}%_%{$instance.instancename}%_TCP%")
+      -
+        name: ecp-services-lbvserver-binding-comp
+        type: ns::lbvserver_service_binding
+        properties:
+          name: $components.ecp-lbvserver-comp.properties.name
+          servicename: $parent.properties.name
