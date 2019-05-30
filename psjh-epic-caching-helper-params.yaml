@@ -1,0 +1,30 @@
+name: psjh-epic-caching-helper-params
+description: "Parameters for utilization in Integrated Caching Configurations - Customized for PSJH Epic StyleBooks."
+display-name: "Epic Caching Helper Parameters"
+author: Nathan Joseph - Providence St. Joseph Health
+private: true
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks: 
+  - 
+    namespace: netscaler.nitro.config
+    prefix: ns
+    version: "11.1"
+parameters:
+  -
+    name: policyname
+    label: Integrated Caching Policy Name
+    type: string
+components:
+  -
+    name: cachepolicy
+    type: ns::cachepolicy
+    properties:
+        policyname: $parameters.policyname
+        rule: str("true")
+        action: str("NOCACHE")
+outputs:
+  -
+    name: cachepolicy
+    value: $components.cachepolicy

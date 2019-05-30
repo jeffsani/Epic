@@ -1,0 +1,27 @@
+name: psjh-epic-wbs-helper-params
+description: "Parameters for utilization in WBS Configurations - Customized for PSJH Epic StyleBooks."
+display-name: "Epic WBS Helper Parameters"
+author: Nathan Joseph - Providence St. Joseph Health
+private: true
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+parameters:
+  -
+    name: WBSapp
+    label: WBS Web Application
+    description: "Provide the name of the WebBLOB Service Application supported by this configuration for monitoring. EX: /<WBSapp>/ACWebBlobService.ashx?env=PRD"
+    type: string
+    required: true
+  -
+    name: WBSenv
+    label: WBS Environment
+    description: "Provide the name of the WebBLOB Service Application supported by this configuration for monitoring. EX: /WBS_PRD/ACWebBlobService.ashx?env=<WBSenv>"
+    type: string
+    required: true
+  -
+    name: WBSmonitorVersion
+    label: Use New WBS Monitor Path
+    description: "Select this option if the WebBLOB Service Application is running August 2018, Epic 2018 with special update C8409535, or Epic 2017 with special updates C8323625 and C8331409. Doing so will utilize the new recommended Monitor path."
+    type: boolean
+    required: false

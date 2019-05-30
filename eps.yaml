@@ -1,0 +1,117 @@
+name: psjh-epic-eps-ftp-lbvserver
+description: "Epic EPS Server FTP Load-Balancing - Customized for PSJH Epic StyleBooks."
+display-name: "Epic EPS Server FTP LB vServer StyleBook"
+author: Nathan Joseph
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks: 
+  - 
+    namespace: netscaler.nitro.config
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters-default-sources:
+  - psjh-epic::psjh-epic-lb-helper-params
+  - psjh-epic::psjh-epic-ftp-helper-params
+components:
+  -
+    name: eps-FTPIPWhitelist-Dataset
+    condition: $parameters.FTPWhitelistIPs
+    type: ns::policydataset
+    properties:
+        name: str("dataset_EPS_%{$parameters.AppDescription}%_IP_Whitelist")
+        type: str("ipv4")
+    components:
+      -
+        name: eps-FTPIPWhitelist-DatasetBindings
+        type: ns::policydataset_value_binding
+        repeat:
+          repeat-list: $parameters.FTPWhitelistIPs
+          repeat-item: ip
+        properties:
+          name: $parent.properties.name
+          value: str("%{$ip}%")
+      -
+        name: eps-FTPIPWhitelist-ResponderPolicy
+        type: ns::responderpolicy
+        properties:
+          name: str("resppol_EPS_%{$parameters.AppDescription}%_IP_Whitelist")
+          rule: str("!(CLIENT.IP.SRC.TYPECAST_TEXT_T.CONTAINS_ANY(\"%{$parent.properties.name}%\"))")
+          action: str("DROP")
+  -
+    name: eps-lbvserver-comp
+    type: ns::lbvserver
+    properties:
+        name: str("lb_EPS_%{$parameters.AppDescription}%_FTP")
+        servicetype: FTP
+        ipv46: $parameters.ip
+        port: 21
+        lbmethod: ROUNDROBIN
+        tcpprofilename?: $parameters.vserver-tcp-profile
+        comment: str("EPS FTP LB vServer Configuration - %{$parameters.AppDescription}%") 
+    components:
+      -
+        name: eps-ResponderPolicy-binding
+        type: ns::lbvserver_responderpolicy_binding
+        condition: $parameters.FTPWhitelistIPs
+        properties:
+          name: $parent.properties.name
+          policyname: $components.eps-FTPIPWhitelist-Dataset.components.eps-FTPIPWhitelist-ResponderPolicy.properties.name
+          priority: 100
+          gotopriorityexpression: str("END")
+          bindpoint: str("RESPONSE")
+      -
+        name: eps-servicegroup-comp
+        type: ns::servicegroup
+        properties:
+          servicegroupname: str("svcg_EPS_%{$parameters.AppDescription}%_FTP")
+          servicetype: FTP
+          useproxyport: str("YES")
+          tcpprofilename?: $parameters.servicegroup-tcp-profile
+          comment?: str("EPS FTP LB Service Group Configuration - %{$parameters.AppDescription}%") 
+        components:
+          -
+            name: eps-lbvserver-svcg-binding
+            type: ns::lbvserver_servicegroup_binding
+            properties:
+              name: $parent.parent.properties.name
+              servicegroupname: $parent.properties.servicegroupname
+          -
+            name: eps-server-members
+            type: ns::server
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            repeat-condition: $server.add-server
+            properties:
+              name: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              ipaddress: $server.ip
+          - 
+            name: eps-svcg-ip-members
+            type: ns::servicegroup_servicegroupmember_binding
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            properties: 
+              servername: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              port: 21
+              servicegroupname: $parent.properties.servicegroupname
+  -
+    name: eps-monitor-comp
+    type: ns::lbmonitor
+    properties:
+      monitorname: str("mon_EPS_%{$parameters.AppDescription}%_FTP-EXTENDED")
+      type: FTP-EXTENDED
+      scriptname: str("nsftp.pl")
+      filename: str("/") + $parameters.FTPfile
+      username?: $parameters.FTPUser
+      password?: $parameters.FTPPassword
+    components:
+      -
+        name: eps-monitor-svcg-binding-comp-new
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: $components.eps-lbvserver-comp.components.eps-servicegroup-comp.properties.servicegroupname
+          monitor_name: $parent.properties.monitorname

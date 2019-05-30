@@ -1,0 +1,127 @@
+name: psjh-epic-kuiper-ssl-lbvserver
+description: "Epic Kuiper Server SSL Load-Balancing - Customized for PSJH Epic StyleBooks."
+display-name: "Epic Kuiper Server SSL LB vServer StyleBook"
+author: Nathan Joseph
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks: 
+  - 
+    namespace: netscaler.nitro.config
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters-default-sources:
+  - psjh-epic::psjh-epic-lb-helper-params
+  - psjh-epic::psjh-epic-ssl-helper-params
+parameters:
+  -
+    name: httpprofile
+    label: HTTP Profile Name
+    description: "Optionally, provide the name of an existing HTTP Profile to use for the configuration."
+    type: string
+    required: false 
+  -
+    name: KuiperApp
+    label: Kuiper Web Application
+    description: "Provide the name of the Kuiper Application supported by this configuration for monitoring. EX: /<KuiperApp>/Health/loadbalancing"
+    type: string
+    required: true
+substitutions:
+components:
+  -
+    name: Kuiper-lbvserver-comp
+    type: ns::lbvserver
+    properties:
+        name: str("lb_Kuiper_%{$parameters.AppDescription}%_SSL")
+        servicetype: SSL
+        ipv46: $parameters.ip
+        port: 443
+        lbmethod: ROUNDROBIN
+        timeout: 0
+        tcpprofilename?: $parameters.vserver-tcp-profile
+        httpprofilename?: $parameters.httpprofile
+        redirectfromport?: $parameters.SSLRedirectPort
+        httpsredirecturl?: $parameters.SSLRedirectURL
+        comment: str("Kuiper SSL LB vServer Configuration - %{$parameters.AppDescription}%") 
+    components:
+      -
+        name: Kuiper-sslvserver-sslprofile
+        type: ns::sslvserver
+        condition: $parameters.SSLProfile
+        properties:
+          sslprofile: $parameters.SSLProfile
+          vservername: $parent.properties.name
+      -
+        name: Kuiper-servicegroup-comp
+        type: ns::servicegroup
+        properties:
+          servicegroupname: str("svcg_Kuiper_%{$parameters.AppDescription}%_SSL")
+          servicetype: SSL
+          downstateflush: DISABLED
+          sp: str("OFF")
+          useproxyport: str("YES")
+          tcpprofilename?: $parameters.servicegroup-tcp-profile
+          httpprofilename?: $parameters.httpprofile
+          comment?: str("Kuiper SSL LB Service Group Configuration - %{$parameters.AppDescription}%") 
+        components:
+          -
+            name: Kuiper-lbvserver-svcg-binding
+            type: ns::lbvserver_servicegroup_binding
+            properties:
+              name: $parent.parent.properties.name
+              servicegroupname: $parent.properties.servicegroupname
+          -
+            name: Kuiper-server-members
+            type: ns::server
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            repeat-condition: $server.add-server
+            properties:
+              name: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              ipaddress: $server.ip
+          - 
+            name: Kuiper-svcg-ip-members
+            type: ns::servicegroup_servicegroupmember_binding
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            properties: 
+              servername: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              port: 443
+              servicegroupname: $parent.properties.servicegroupname
+      - 
+        name: vserver-certs-bindings
+        type: psjh-epic::psjh-vserver-certs-binds
+        condition: $parameters.certificates
+        properties:
+          certificates: $parameters.certificates
+          vserver-name: $parent.properties.name
+      - 
+        name: vserver-certs-bindings-existing
+        type: ns::sslvserver_sslcertkey_binding
+        condition: $parameters.certificates-existing
+        properties:
+          certkeyname: $parameters.certificates-existing
+          vservername: $parent.properties.name
+  -
+    name: Kuiper-monitor-comp
+    type: ns::lbmonitor
+    properties:
+      monitorname: str("mon_Kuiper_%{$parameters.AppDescription}%_HTTP")
+      type: HTTP
+      httprequest: str("HEAD /%{$parameters.KuiperApp}%/Health/loadbalancing")
+      respcode: [str("204")]
+      secure: str("YES")
+      interval: 30
+      resptimeout: 10
+      retries: 3
+    components:
+      -
+        name: Kuiper-monitor-svcg-binding-comp-new
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: $components.Kuiper-lbvserver-comp.components.Kuiper-servicegroup-comp.properties.servicegroupname
+          monitor_name: $parent.properties.monitorname

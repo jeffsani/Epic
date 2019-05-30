@@ -1,0 +1,245 @@
+name: psjh-epic-gslb
+description: "Epic Global Server Load-Balancing - Customized for PSJH Epic StyleBooks."
+display-name: "Epic GSLB vServer StyleBook"
+author: Nathan Joseph
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0"
+import-stylebooks:                       
+  -
+    namespace: netscaler.nitro.config    
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters:
+  -
+    name: AppDescription
+    type: string
+    label: Application Description
+    description: Describe this GSLB Deployment for easy identification on ADM and ADC.
+    required: true
+    key: true                                    
+  -
+    name: algorithm
+    label: Load-Balancing Algorithm
+    description: Select the load-balancing algorithm to use with this GSLB Deployment.
+    type: string
+    default: ROUNDROBIN
+    required: true
+    allowed-values: 
+      - ROUNDROBIN
+      - LEASTCONNECTION
+      - STATICPROXIMITY
+  -
+    name: protocol
+    label: Load-Balancing Protocol
+    description: Select the protocol utilized by the services associated with this GSLB Deployment. Available choices match the protocols used by other StyleBooks.
+    type: string
+    required: true
+    allowed-values:
+      - HTTP
+      - FTP
+      - TCP
+      - SSL
+      - SSL_BRIDGE
+  -
+    name: persistence
+    label: Stateful GSLB
+    description: Configure this section if the GSLB Deployment will support Stateful services such as Hyperspace Web.
+    type: object
+    parameters:      
+      -
+        name: persistenceid
+        label: GSLB Persistence ID
+        description: Provide a unique integer identifier for this GSLB configuration. Make sure the identifier is not used for any other GSLB Deployment. Possible value (1-65535).  
+        min-value: 1
+        max-value: 65535
+        type: number
+  -
+    name: domains
+    label: GSLB Domain Names
+    description: Provide the list of GSLB Domain Names associated with this Deployment.
+    type: string[]
+    required: true
+  -
+    name: services
+    label: Active GSLB Services
+    description: Provide information about the active GSLB Service end points (LB / CS vServers).
+    type: object[]
+    required: true
+    parameters:
+      -
+        name: site
+        label: Site
+        description: Provide the GSLB Site Name for the GSLB Service.
+        type: string
+        required: true
+      -
+        name: virtual-ip
+        label: Service IP
+        description: Provide the IP Address of the GSLB Service in this site.
+        type: ipaddress
+        required: true
+      -
+        name: public-ipaddress
+        label: Service Public IP Address
+        description: Provide the Public IP Address of the GSLB Service if it is behind a NAT.
+        type: ipaddress
+        required: true
+      -
+        name: virtual-port
+        label: Service Port
+        description: Provide the port utilized by the GSLB Service 
+        type: tcp-port
+        required: true
+      -
+        name: add-server
+        label: Add Server Object for GSLB Service?
+        description: Create the necessary server object for the GSLB Service on destination NetScalers? If Server object already exists, clear this checkbox.
+        type: boolean
+        default: true
+  -
+    name: backup-services
+    label: Passive GSLB Services
+    description: Provide information about the passive GSLB Service end points (LB / CS vServers)  
+    type: object[]
+    parameters:
+      -
+        name: site
+        label: Site
+        description: Provide the GSLB Site Name for the GSLB Service.
+        type: string
+        required: true
+      -
+        name: virtual-ip
+        label: Service IP
+        description: Provide the IP Address of the GSLB Service in this site.
+        type: ipaddress
+        required: true
+      -
+        name: public-ipaddress
+        label: Service Public IP Address
+        description: Provide the Public IP Address of the GSLB Service if it is behind a NAT.
+        type: ipaddress
+        required: true
+      -
+        name: virtual-port
+        label: Service Port
+        description: Provide the port utilized by the GSLB Service 
+        type: tcp-port
+        required: true
+      -
+        name: add-server
+        label: Add Server Object for GSLB Service?
+        description: Create the necessary server object for the GSLB Service on destination NetScalers? If Server object already exists, clear this checkbox.
+        type: boolean
+        default: true
+components:
+  -
+    name: gslb-server-members
+    type: ns::server
+    repeat: $parameters.services
+    repeat-item: service
+    repeat-condition: $service.add-server
+    properties:
+      name: str("gslb_srv_%{$service.site}%_%{$service.virtual-ip}%")
+      ipaddress: $service.virtual-ip
+  -
+    name: gslb-backup-server-members
+    type: ns::server
+    repeat: $parameters.backup-services
+    repeat-item: service
+    repeat-condition: $service.add-server
+    properties:
+      name: str("gslb_srv_%{$service.site}%_%{$service.virtual-ip}%")
+      ipaddress: $service.virtual-ip
+  -
+    name: gslb-backupvserver-comp
+    type: ns::gslbvserver
+    description: Creates a GSLB Backup vServer config object
+    condition: $parameters.backup-services
+    properties:
+      name: str("gslb_%{$parameters.AppDescription}%_%{$parameters.protocol}%_backup")
+      servicetype: $parameters.protocol
+      lbmethod: $parameters.algorithm
+      comment?: str("GSLB %{$parameters.protocol}% vServer Configuration - %{$parameters.AppDescription}% - Backup vServer") 
+  -
+    name: gslb-vserver-comp
+    type: ns::gslbvserver
+    description: Creates a GSLB vServer config object
+    properties:
+      name: str("gslb_%{$parameters.AppDescription}%_%{$parameters.protocol}%")
+      servicetype: $parameters.protocol
+      lbmethod: $parameters.algorithm
+      backupvserver?: $components.gslb-backupvserver-comp.properties.name
+      persistenceid?: $parameters.persistence.persistenceid
+      persistencetype?: if-then-else($parameters.persistence,str("SOURCEIP"))
+      timeout?: if-then-else($parameters.persistence,int("30"))
+      comment?: str("GSLB %{$parameters.protocol}% vServer Configuration - %{$parameters.AppDescription}%")
+    components:
+      -
+        name: gslb-domain-comp
+        type: ns::gslbvserver_domain_binding
+        repeat: $parameters.domains
+        repeat-item: domain
+        properties:
+          name: $parent.properties.name
+          domainname: $domain
+          ttl: 5
+  -
+    name: gslb-service-comp
+    type: ns::gslbservice
+    description: Creates the GSLB Services
+    repeat:
+      repeat-list: $parameters.services
+      repeat-item: service
+    properties:
+      servicename: str("gslb_svc_%{$parameters.AppDescription}%_%{$parameters.protocol}%_%{$service.virtual-ip}%")
+      servername:  str("gslb_srv_%{$service.site}%_%{$service.virtual-ip}%")
+      publicip?: $service.public-ipaddress
+      servicetype: $parameters.protocol
+      port: $service.virtual-port
+      sitename: $service.site
+      sitepersistence?: if-then-else($parameters.persistence,str("ConnectionProxy"))
+      downstateflush: str("DISABLED")
+      cip: str("ENABLED")
+      cipheader: str("X-Forwarded-For")
+      comment?: str("GSLB %{$parameters.protocol}% Service Configuration - %{$parameters.AppDescription}%") 
+    components:
+      -
+        name: gslb-vserver-service-binding-comp
+        type: ns::gslbvserver_gslbservice_binding
+        description: Creates a Binding between the GSLB vserver and the GSLB Service
+        properties:
+          name: $components.gslb-vserver-comp.properties.name
+          servicename: $parent.properties.servicename
+  -
+    name: gslb-backupservice-comp
+    type: ns::gslbservice
+    description: Creates the GLB Backup Services
+    repeat:
+      repeat-list: $parameters.backup-services
+      repeat-item: backup-service
+    properties:
+      servicename: str("gslb_svc_%{$parameters.AppDescription}%_%{$parameters.protocol}%_%{$backup-service.virtual-ip}%")
+      servername:  str("gslb_srv_%{$backup-service.site}%_%{$backup-service.virtual-ip}%")
+      publicip?: $backup-service.public-ipaddress
+      servicetype: $parameters.protocol
+      port: $backup-service.virtual-port
+      sitename: $backup-service.site
+      sitepersistence?: if-then-else($parameters.persistence,str("ConnectionProxy"))
+      downstateflush: str("DISABLED")
+      cip: str("ENABLED")
+      cipheader: str("X-Forwarded-For")
+      comment?: str("GSLB %{$parameters.protocol}% Service Configuration - %{$parameters.AppDescription}%")
+    components:
+      -
+        name: gslb-backupvserver-service-binding-comp
+        type: ns::gslbvserver_gslbservice_binding
+        description: Creates a Binding between the GSLB backup vserver and the current GSLB backup service
+        properties:
+          name: $components.gslb-backupvserver-comp.properties.name
+          servicename: $parent.properties.servicename

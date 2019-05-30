@@ -1,0 +1,149 @@
+name: psjh-epic-mychart-ssl-lbvserver
+description: "Epic MyChart Server SSL Load-Balancing - Customized for PSJH Epic StyleBooks."
+display-name: "Epic MyChart Server SSL LB vServer StyleBook"
+author: Nathan Joseph
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks: 
+  - 
+    namespace: netscaler.nitro.config
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters-default-sources:
+  - psjh-epic::psjh-epic-lb-helper-params
+  - psjh-epic::psjh-epic-ssl-helper-params
+parameters:
+  -
+    name: httpprofile
+    label: HTTP Profile Name
+    description: "Optionally, provide the name of an existing HTTP Profile to use for the configuration."
+    type: string
+    required: false 
+  -
+    name: MyChartApp
+    label: MyChart Web Application
+    description: "Provide the name of the MyChart Web Application supported by this configuration for monitoring. EX: /<MyChartApp>/default.asp?HealthCheck=1"
+    type: string
+    required: true
+  -
+    name: CachePolicy
+    label: Create NoCache Policy
+    description: "Create an Integrated Caching policy to prevent caching of objects in responses returned by the web server. This configuration is recommended for MyChart and EpicCare Link by Epic."
+    type: psjh-epic::psjh-epic-caching-helper-params
+    required: false
+components:
+  -
+    name: mychart-CachePolicy
+    condition: $parameters.CachePolicy
+    type: psjh-epic::psjh-epic-caching-helper-params
+    properties-default-sources:
+      - $parameters.CachePolicy
+  -
+    name: MyChart-lbvserver-comp
+    type: ns::lbvserver
+    properties:
+        name: str("lb_MyChart_%{$parameters.AppDescription}%_SSL")
+        servicetype: SSL
+        ipv46: $parameters.ip
+        port: 443
+        lbmethod: ROUNDROBIN
+        persistencetype: COOKIEINSERT
+        timeout: 0
+        tcpprofilename?: $parameters.vserver-tcp-profile
+        httpprofilename?: $parameters.httpprofile
+        redirectfromport?: $parameters.SSLRedirectPort
+        httpsredirecturl?: $parameters.SSLRedirectURL
+        comment: str("MyChart SSL LB vServer Configuration - %{$parameters.AppDescription}%") 
+    components:
+      -
+        name: MyChart-CachePolicy-binding
+        type: ns::lbvserver_cachepolicy_binding
+        condition: $parameters.CachePolicy
+        properties:
+          name: $parent.properties.name
+          policyname: $parameters.CachePolicy.policyname
+          priority: 100
+          gotopriorityexpression: str("END")
+          bindpoint: str("RESPONSE")
+      -
+        name: MyChart-sslvserver-sslprofile
+        type: ns::sslvserver
+        condition: $parameters.SSLProfile
+        properties:
+          sslprofile: $parameters.SSLProfile
+          vservername: $parent.properties.name
+      -
+        name: MyChart-servicegroup-comp
+        type: ns::servicegroup
+        properties:
+          servicegroupname: str("svcg_MyChart_%{$parameters.AppDescription}%_SSL")
+          servicetype: SSL
+          downstateflush: DISABLED
+          sp: str("OFF")
+          useproxyport: str("YES")
+          tcpprofilename?: $parameters.servicegroup-tcp-profile
+          httpprofilename?: $parameters.httpprofile
+          comment?: str("MyChart SSL LB Service Group Configuration - %{$parameters.AppDescription}%") 
+        components:
+          -
+            name: MyChart-lbvserver-svcg-binding
+            type: ns::lbvserver_servicegroup_binding
+            properties:
+              name: $parent.parent.properties.name
+              servicegroupname: $parent.properties.servicegroupname
+          -
+            name: MyChart-server-members
+            type: ns::server
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            repeat-condition: $server.add-server
+            properties:
+              name: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              ipaddress: $server.ip
+          - 
+            name: MyChart-svcg-ip-members
+            type: ns::servicegroup_servicegroupmember_binding
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            properties: 
+              servername: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              port: 443
+              servicegroupname: $parent.properties.servicegroupname
+      - 
+        name: vserver-certs-bindings
+        type: psjh-epic::psjh-vserver-certs-binds
+        condition: $parameters.certificates
+        properties:
+          certificates: $parameters.certificates
+          vserver-name: $parent.properties.name
+      - 
+        name: vserver-certs-bindings-existing
+        type: ns::sslvserver_sslcertkey_binding
+        condition: $parameters.certificates-existing
+        properties:
+          certkeyname: $parameters.certificates-existing
+          vservername: $parent.properties.name
+  -
+    name: MyChart-monitor-comp
+    type: ns::lbmonitor
+    properties:
+      monitorname: str("mon_MyChart_%{$parameters.AppDescription}%_HTTP-ECV")
+      type: HTTP
+      httprequest: str("HEAD /%{$parameters.MyChartApp}%/default.asp?HealthCheck=1")
+      respcode: [str("200")]
+      secure: str("YES")
+      interval: 30
+      resptimeout: 10
+      retries: 3
+    components:
+      -
+        name: MyChart-monitor-svcg-binding-comp-new
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: $components.MyChart-lbvserver-comp.components.MyChart-servicegroup-comp.properties.servicegroupname
+          monitor_name: $parent.properties.monitorname

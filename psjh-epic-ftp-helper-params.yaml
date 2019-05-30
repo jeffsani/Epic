@@ -1,0 +1,33 @@
+name: psjh-epic-ftp-helper-params
+description: "Parameters for utilization in FTP Configurations - Customized for PSJH Epic StyleBooks."
+display-name: "Epic FTP Helper Parameters"
+author: Nathan Joseph - Providence St. Joseph Health
+private: true
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+parameters:
+  -
+    name: FTPfile
+    type: string
+    label: Filename for FTP Monitor
+    description: "Input the name of the FTP File Name utilized for monitoring (Eg: canary.txt)."
+    required: true
+  -
+    name: FTPUser
+    label: FTP Username
+    description: "Optionally - Provide the name of the FTP User utilized for monitoring."
+    type: string
+    required: false
+  -
+    name: FTPPassword
+    label: FTP Password
+    description: "Optionally - Provide the password of the FTP User utilized for monitoring."
+    type: password
+    required: false
+  -
+    name: FTPWhitelistIPs
+    label: IP Addresses for FTP Whitelisting
+    description: "List of IP Addresses to utilize for restricting access to FTP LB vServer."
+    type: ipaddress[]
+    required: false

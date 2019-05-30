@@ -1,0 +1,50 @@
+name: psjh-epic-intcnct-lb-hidden-helper-params
+description: "Hidden Parametersfor utilization in Interconnect LB Configurations - Customized for PSJH Epic StyleBooks."
+display-name: "Epic Interconnect LB Hidden Helper Parameters and Components"
+author: Nathan Joseph
+private: true
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks:                       
+  -
+    namespace: netscaler.nitro.config    
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters:
+  -
+    name: AppDescription
+    type: string
+    label: Parameter for pass-through utilization of AppDescription
+    description: Hidden parameter utilized from the main Interconnect StyleBook to pass-in the name of the custom App Description.
+    gui:
+      hidden: true
+    required: false
+  -
+    name: cs-vserver-name
+    type: string
+    label: Parameter for pass-through utilization of CS vServer Name
+    description: Hidden parameter utilized from the main Interconnect StyleBook to pass-in the name of the Content Switching Virtual Server for policy binding.
+    gui:
+      hidden: true
+    required: false
+  -
+    name: httpprofilename
+    type: string
+    label: Parameter for pass-through utilization of HTTP Profile
+    description: Hidden parameter utilized from the main Interconnect StyleBook to pass-in the name of the HTTP Profile used to enable WebSockets support.
+    gui:
+      hidden: true
+    required: false
+  -
+    name: servicegroup-tcp-profile
+    type: string
+    label: Parameter for pass-through utilization of TCP Profile
+    description: Hidden parameter utilized from the main Interconnect StyleBook to pass-in the name of the TCP Profile used for the ServiceGroup configuration.
+    gui:
+      hidden: true
+    required: false

@@ -1,0 +1,209 @@
+name: psjh-epic-intcnct-lb-helper-params
+description: "Parameters and Components for utilization in Interconnect LB Configurations - Customized for PSJH Epic StyleBooks."
+display-name: "Epic Interconnect LB Helper Parameters and Components"
+author: Nathan Joseph
+private: true
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks:                       
+  -
+    namespace: netscaler.nitro.config    
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters:
+  -
+    name: ServerPoolDescription
+    type: string
+    label: Interconnect Server Pool Description
+    description: Describe this set of Interconnect Servers for easy identification in ADM.
+    required: true
+  -
+    name: svc-servers                            
+    type: object[]                               
+    label: Backend Servers              
+    description: Names and IPs of Backend Servers.       
+    required: true
+    gui:
+      collapse_pane: false
+      columns: 2
+      updatable: true
+    parameters:                                  
+      - 
+        name: ip                                 
+        label: IP Address of the back-end server.     
+        description: IP Address of the back-end server.   
+        type: ipaddress
+        required: true
+        gui:
+          updatable: true
+      - 
+        name: svc-name                           
+        label: Name of the back-end server.              
+        description: Name of the back-end server. Only used for naming objects on NetScaler, not for DNS Resolution of IP Addresses.       
+        type: string                             
+        required: true
+        gui:
+          updatable: true
+      - 
+        name: add-server
+        label: "Add a server object to NetScaler"
+        description: "Option to add a server object explicitly to the NetScaler, if it does not already exist. If server exists on NetScaler do not select this option."
+        type: boolean
+        default: true
+        gui:
+          hidden: false  
+  - 
+    name: intcnct-apps
+    type: object[]
+    label: Interconnect Web Applications
+    description: A list of Interconnect Web Applications deployed to associated server pool.
+    required: true
+    gui:
+      collapse_pane: true
+      columns: 4
+      updatable: true
+    parameters:
+      -
+        name: webapp-name
+        label: Interconnect Web App Name
+        description: Name of the Interconnect Web Application.
+        type: string
+        required: true
+        gui:
+          updatable: true
+      -
+        name: enable-websockets
+        label: "WebSockets Support (Optional)"
+        description: "Enable WebSockets Protocol for Interconnect Web Application by using the referenced HTTP Profile."
+        type: boolean
+        default: false
+        gui:
+          updatable: true
+      -
+        name: enable-persistencetype
+        label: "Persistence Support (Optional)"
+        description: "Enable LB Persistence for Interconnect Web Application. May be necessary for applications utilizing SOAP 1.2 and Username tokens."
+        type: string
+        required: false
+        allowed-values:
+            - SOURCEIP
+            - COOKIEINSERT
+      -
+        name: persistence-timeout
+        label: "Persistence Timeout (Optional)"
+        description: "If LB Persistence was selected, provide a timeout value. May be necessary for applications utilizing SOAP 1.2 and Username tokens."
+        type: number
+        required: false
+  -
+    name: intcnct-helper
+    label: "Interconnect Hidden Parameter Helper"
+    description: "Interconnect Hidden Parameter Helper"
+    type: psjh-epic::psjh-epic-intcnct-lb-hidden-helper-params
+    gui:
+      hidden: true
+components: 
+  -
+    name: server-members
+    type: ns::server
+    repeat:
+      repeat-list: $parameters.svc-servers
+      repeat-item: server
+      repeat-condition: $server.add-server
+    properties:
+      name: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+      ipaddress: $server.ip
+  -
+    name: intcnct-lbvservers
+    type: ns::lbvserver
+    condition: $parameters.intcnct-apps
+    repeat:
+      repeat-list: $parameters.intcnct-apps 
+      repeat-item: app
+      repeat-index: idx
+    properties:
+      name: str("lb_IC_%{$parameters.intcnct-helper.AppDescription}%_%{$app.webapp-name}%_HTTP")
+      servicetype: HTTP
+      ipv46: 0.0.0.0
+      port: 0
+      lbmethod: ROUNDROBIN
+      httpprofilename?: if-then-else($app.enable-websockets,$parameters.intcnct-helper.httpprofilename)
+      persistencetype?: $app.enable-persistencetype
+      timeout?: $app.persistence-timeout
+      comment?: str("Interconnect HTTP LB vServer Configuration - %{$parameters.intcnct-helper.AppDescription}% - %{$app.webapp-name}%") 
+    components:
+      -
+        name: intcnct-servicegroup
+        type: ns::servicegroup
+        properties:
+          servicegroupname: str("svcg_IC_%{$parameters.intcnct-helper.AppDescription}%_%{$app.webapp-name}%_SSL")
+          servicetype: SSL
+          downstateflush: DISABLED
+          tcpprofilename?: $parameters.intcnct-helper.servicegroup-tcp-profile
+          sp: str("OFF")
+          httpprofilename?: if-then-else($app.enable-websockets,$parameters.intcnct-helper.httpprofilename)
+          comment?: str("Interconnect SSL LB ServiceGroup Configuration - %{$parameters.intcnct-helper.AppDescription}% - %{$app.webapp-name}%") 
+        components:
+          -
+            name: intcnct-lbvserver-svg-binding
+            type: ns::lbvserver_servicegroup_binding
+            properties:
+              name: $parent.parent.properties.name
+              servicegroupname: $parent.properties.servicegroupname
+          -
+            name: intcnct-svg-ip-members
+            type: ns::servicegroup_servicegroupmember_binding
+            repeat: 
+              repeat-list: $parameters.svc-servers
+              repeat-item: server
+            properties:
+              servername: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              port: 443
+              servicegroupname: $parent.properties.servicegroupname
+      -
+        name: csvserver-intcnct-action
+        type: ns::csaction
+        properties:
+          name: str("csa_IC_%{$parameters.intcnct-helper.AppDescription}%_%{$app.webapp-name}%")
+          targetvserver: $parent.properties.name
+      -
+        name: csvserver-intcnct-policy
+        type: ns::cspolicy
+        properties:
+          policyname: "csp_IC_%{$parameters.intcnct-helper.AppDescription}%_%{$app.webapp-name}%"
+          rule: str("HTTP.REQ.URL.SET_TEXT_MODE(IGNORECASE).CONTAINS(\"%{$app.webapp-name}%\")")
+          action: $parent.components.csvserver-intcnct-action.properties.name
+      -
+        name: csvserver-intcnct-binding
+        type: ns::csvserver_cspolicy_binding
+        properties:
+          name: $parameters.intcnct-helper.cs-vserver-name
+          policyname: $parent.components.csvserver-intcnct-policy.properties.policyname
+          priority: ($idx * 10) + 100
+  -
+    name: intcnct-monitors
+    type: ns::lbmonitor
+    condition: $parameters.intcnct-apps
+    repeat:
+      repeat-list: $parameters.intcnct-apps
+      repeat-item: app
+    properties:
+      monitorname: str("mon_IC_%{$parameters.intcnct-helper.AppDescription}%_%{$app.webapp-name}%_HTTP-ECV")
+      type: HTTP-ECV
+      send: str("GET %{$app.webapp-name}%/httplistener.ashx")
+      recv: str("ServiceRunning")
+      secure: str("YES")
+      interval: 30
+      resptimeout: 10
+      retries: 3
+    components:
+      -
+        name: intcnct-monitor-svcg-binding
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: str("svcg_IC_%{$parameters.intcnct-helper.AppDescription}%_%{$app.webapp-name}%_SSL")
+          monitor_name: $parent.properties.monitorname

@@ -1,0 +1,34 @@
+name: psjh-epic-cs-helper-params
+description: "Parameters for utilization in CS Configurations - Customized for PSJH Epic StyleBooks."
+display-name: "Epic CS Helper Parameters"
+author: Nathan Joseph - Providence St. Joseph Health
+private: true
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+parameters:
+  -
+    name: AppDescription
+    type: string
+    label: Application Description
+    description: Describe this Content Switching Deployment for easy identification on ADM and ADC.
+    required: true
+    key: true   
+  -
+    name: ip                                                
+    type: ipaddress
+    label: Application Virtual IP (VIP)
+    description: Application VIP used for the CS vServer configuration.
+    required: true    
+  -
+    name: vserver-tcp-profile
+    type: string
+    label: TCP Profile Name for CS vServer Configuration.
+    description: "Optionally provide the name of a TCP Profile to bind to the SSL CS vServer."
+    required: false
+  -
+    name: servicegroup-tcp-profile
+    type: string
+    label: TCP Profile Name for CS Service/Service Group Configuration.
+    description: "Optionally provide the name of a TCP Profile to bind to the Service Group."
+    required: false

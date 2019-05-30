@@ -1,0 +1,69 @@
+name: psjh-epic-lb-helper-params
+description: "Parameters for utilization in LB Configurations - Customized for PSJH Epic StyleBooks."
+display-name: "Epic LB Helper Parameters"
+author: Nathan Joseph - Providence St. Joseph Health
+private: true
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+parameters:
+  -
+    name: AppDescription
+    type: string
+    label: Application Description
+    description: Describe this Load-Balancing Deployment for easy identification on ADM and ADC.
+    required: true
+    key: true   
+  -
+    name: ip                                                
+    type: ipaddress
+    label: Application Virtual IP (VIP)
+    description: Application VIP used for the LB vServer configuration.
+    required: true    
+  -
+    name: svc-servers                            
+    type: object[]                               
+    label: Backend Servers              
+    description: Names and IPs of Backend Servers.       
+    required: true
+    gui:
+      collapse_pane: false
+      columns: 2
+      updatable: true
+    parameters:                                  
+      - 
+        name: ip                                 
+        label: IP Address of the back-end server.     
+        description: IP Address of the back-end server.   
+        type: ipaddress
+        required: true
+        gui:
+          updatable: true
+      - 
+        name: svc-name                           
+        label: Name of the back-end server.              
+        description: Name of the back-end server. Only used for naming objects on NetScaler, not for DNS Resolution of IP Addresses.       
+        type: string                             
+        required: true
+        gui:
+          updatable: true
+      - 
+        name: add-server
+        label: "Add a server object to NetScaler"
+        description: "Option to add a server object explicitly to the NetScaler, if it does not already exist. If server exists on NetScaler do not select this option."
+        type: boolean
+        default: true
+        gui:
+          hidden: false
+  -
+    name: vserver-tcp-profile
+    type: string
+    label: TCP Profile Name for LB vServer Configuration.
+    description: "Optionally provide the name of a TCP Profile to bind to the SSL LB vServer."
+    required: false
+  -
+    name: servicegroup-tcp-profile
+    type: string
+    label: TCP Profile Name for LB Service/Service Group Configuration.
+    description: "Optionally provide the name of a TCP Profile to bind to the Service Group."
+    required: false

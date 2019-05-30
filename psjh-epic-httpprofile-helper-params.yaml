@@ -1,0 +1,206 @@
+name: psjh-epic-httpprofile-helper-params
+description: "Parameters for utilization in HTTP Profile Configurations - Customized for PSJH Epic StyleBooks."
+display-name: "Epic HTTP Profile Helper Parameters"
+author: Nathan Joseph - Providence St. Joseph Health
+private: true
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks: 
+  - 
+    namespace: netscaler.nitro.config
+    prefix: ns
+    version: "11.1"
+parameters: 
+    - 
+      name: name
+      label: "HTTP Profile Name"
+      description: "Name for an HTTP profile. Must begin with a letter, number, or the underscore (_) character. Other characters allowed, after the first character, are the hyphen (-), period (.), hash (#), space ( ), at (@), colon (:), and equal (=) characters. The name of a HTTP profile cannot be changed after it is created."
+      type: string
+      max-length: 127
+      required: true
+    - 
+      name: minreusepool
+      label: "Minimum Reuse Pool"
+      description: "Minimum limit on the number of connections, from the NetScaler to a particular server that are kept in the reuse pool. This setting is helpful for optimal memory utilization and for reducing the idle connections to the server just after the peak time. Zero implies no limit on reuse pool size."
+      type: number
+      min-value: 0
+      max-value: 360000
+      default: 0
+      required: false
+    - 
+      name: maxreusepool
+      label: "Maximum Reuse Pool"
+      description: "Maximum limit on the number of connections, from the NetScaler to a particular server that are kept in the reuse pool. This setting is helpful for optimal memory utilization and for reducing the idle connections to the server just after the peak time. Zero implies no limit on reuse pool size."
+      type: number
+      min-value: 0
+      max-value: 360000
+      default: 0
+      required: false
+    - 
+      name: reusepooltimeout
+      label: "Reuse Pool Timeout"
+      description: "Idle timeout (in seconds) for server connections in re-use pool. Connections in the re-use pool are flushed, if they remain idle for the configured timeout."
+      type: number
+      min-value: 0
+      max-value: 31536000
+      default: 0
+      required: false
+    - 
+      name: incomphdrdelay
+      label: "Incomplete Header Delay"
+      description: "Maximum time to wait, in milliseconds, between incomplete header packets. If the header packets take longer to arrive at NetScaler, the connection is silently dropped."
+      type: number
+      min-value: 1
+      max-value: 360000
+      default: 7000
+      required: false
+    - 
+      name: reqtimeout
+      label: "Request Timeout"
+      description: "Time, in seconds, within which the HTTP request must complete. If the request does not complete within this time, the specified request timeout action is executed. Zero disables the timeout."
+      type: number
+      min-value: 0
+      max-value: 86400
+      default: 0
+      required: false
+    - 
+      name: maxreq
+      label: "Max requests per connection"
+      description: "Maximum number of requests allowed on a single connection. Zero implies no limit on the number of requests."
+      type: number
+      min-value: 0
+      max-value: 65534
+      default: 0
+      required: false
+    - 
+      name: reqtimeoutaction
+      label: "Request Timeout Action"
+      description: "Action to take when the HTTP request does not complete within the specified request timeout duration."
+      type: string
+      required: false
+    - 
+      name: maxheaderlen
+      label: "Maximum Header Length"
+      description: "Number of bytes to be queued to look for complete header before returning error. If complete header is not obtained after queuing these many bytes, request will be marked as invalid and no L7 processing will be done for that TCP connection."
+      type: number
+      min-value: 2048
+      max-value: 61440
+      default: 24820
+      required: false
+    - 
+      name: clientiphdrexpr
+      label: "Client IP Header Expression"
+      description: "Name of the header that contains the real client IP address."
+      type: string
+      required: false
+    - 
+      name: conmultiplex
+      label: "Connection Multiplexing"
+      description: "Reuse server connections for requests from more than one client connections."
+      type: boolean
+      required: false
+      default: true
+    - 
+      name: dropinvalreqs
+      label: "Drop Invalid Requests"
+      description: "Drop invalid HTTP requests or responses."
+      type: boolean
+      required: false
+    - 
+      name: markhttp09inval
+      label: "Mark HTTP/0.9 requests as invalid"
+      description: "Mark HTTP/0.9 requests as invalid."
+      type: boolean
+      required: false
+    - 
+      name: markconnreqinval
+      label: "Mark CONNECT requests as invalid."
+      description: "Mark CONNECT requests as invalid."
+      type: boolean
+      required: false
+    - 
+      name: cmponpush
+      label: "Compression on PUSH packet"
+      description: "Start data compression on receiving a TCP packet with PUSH flag set."
+      type: boolean
+      required: false
+    - 
+      name: dropextracrlf
+      label: "Drop extra CRLF"
+      description: "Drop any extra 'CR' and 'LF' characters present after the header."
+      type: boolean
+      required: false
+      default: true
+    - 
+      name: websocket
+      label: "Enable WebSocket connections"
+      description: "HTTP connection to be upgraded to a web socket connection. Once upgraded, NetScaler does not process Layer 7 traffic on this connection."
+      type: boolean
+      required: false
+    - 
+      name: rtsptunnel
+      label: "Enable RTSP Tunnel"
+      description: "Allow RTSP tunnel in HTTP. Once application/x-rtsp-tunnelled is seen in Accept or Content-Type header, NetScaler does not process Layer 7 traffic on this connection."
+      type: boolean
+      required: false
+    - 
+      name: dropextradata
+      label: "Drop extra data from server"
+      description: "Drop any extra data when server sends more data than the specified content-length."
+      type: boolean
+      required: false
+    - 
+      name: weblog
+      label: "HTTP Weblogging"
+      description: "Enable or disable web logging."
+      type: boolean
+      required: false
+      default: true
+    - 
+      name: persistentetag
+      label: "Persistence ETag"
+      description: "Generate the persistent NetScaler specific ETag for the HTTP response with ETag header."
+      type: boolean
+      required: false
+    - 
+      name: adpttimeout
+      label: "Adaptive Timeout"
+      description: "Adapts the configured request timeout based on flow conditions. The timeout is increased or decreased internally and applied on the flow."
+      type: boolean
+      required: false
+substitutions:
+  enabled-disabled:
+    true: str("ENABLED")
+    false: str("DISABLED")
+components:
+  -
+    name: httpprofile
+    type: ns::nshttpprofile
+    properties:
+        name: $parameters.name
+        dropinvalreqs?: $substitutions.enabled-disabled[$parameters.dropinvalreqs]
+        markhttp09inval?: $substitutions.enabled-disabled[$parameters.markhttp09inval]
+        markconnreqinval?: $substitutions.enabled-disabled[$parameters.markconnreqinval]
+        cmponpush?: $substitutions.enabled-disabled[$parameters.cmponpush]
+        conmultiplex?: $substitutions.enabled-disabled[$parameters.conmultiplex]
+        maxreusepool?: $parameters.maxreusepool
+        dropextracrlf?: $substitutions.enabled-disabled[$parameters.dropextracrlf]
+        incomphdrdelay?: $parameters.incomphdrdelay
+        websocket?: $substitutions.enabled-disabled[$parameters.websocket]
+        rtsptunnel?: $substitutions.enabled-disabled[$parameters.rtsptunnel]
+        reqtimeout?: $parameters.reqtimeout
+        adpttimeout?: $substitutions.enabled-disabled[$parameters.adpttimeout]
+        reqtimeoutaction?: $parameters.reqtimeoutaction
+        dropextradata?: $substitutions.enabled-disabled[$parameters.dropextradata]
+        weblog?: $substitutions.enabled-disabled[$parameters.weblog]
+        clientiphdrexpr?: $parameters.clientiphdrexpr
+        maxreq?: $parameters.maxreq
+        persistentetag?: $substitutions.enabled-disabled[$parameters.persistentetag]
+        reusepooltimeout?: $parameters.reusepooltimeout
+        maxheaderlen?: $parameters.maxheaderlen
+        minreusepool?: $parameters.minreusepool
+outputs:
+  -
+    name: httpprofile
+    value: $components.httpprofile

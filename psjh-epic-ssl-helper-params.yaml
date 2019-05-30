@@ -1,0 +1,43 @@
+name: psjh-epic-ssl-helper-params
+description: "Parameters for utilization in SSL Configurations - Customized for PSJH Epic StyleBooks."
+display-name: "Epic SSL Helper Parameters"
+author: Nathan Joseph - Providence St. Joseph Health
+private: true
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks:                  
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters:
+  -
+   name: SSLProfile
+   type: string
+   label: SSL Profile
+   description: Application SSL Profile
+   required: false
+  -
+   name: certificates
+   label: "SSL Certificate Settings (new certificates only)"
+   description: "Certificates for this virtual server. Use only for new certificates on NetScaler devices."
+   type: "psjh-epic::psjh-certificate[]"
+  -
+   name: certificates-existing
+   type: string
+   label: "SSL Certificate Name (existing certificates only)"
+   description: "Name of existing SSL Certificate to bind to SSL vServer. Use only for existing certificates on NetScaler devices."
+   required: false
+  -
+   name: SSLRedirectPort
+   type: tcp-port
+   label: Port for Basic HTTP Redirect (Only if redirecting HTTP to HTTPS)
+   description: TCP Port that will be redirected to the secure HTTPS port.
+   required: false
+  -
+   name: SSLRedirectURL
+   type: string
+   label: SSL Redirection URL  (Only if redirecting HTTP to HTTPS)
+   description: Fully Qualified Domain Name (FQDN) to utilize in HTTPS redirection.
+   required: false

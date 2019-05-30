@@ -1,0 +1,113 @@
+name: psjh-epic-ic-ssl-csvserver
+description: "Epic Interconnect Server SSL Content-Switching - Customized for PSJH Epic StyleBooks."
+display-name: "Epic IC Server SSL CS vServer StyleBook"
+author: Nathan Joseph
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0"
+import-stylebooks:                       
+  -
+    namespace: netscaler.nitro.config    
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters-default-sources: 
+  - psjh-epic::psjh-epic-cs-helper-params
+  - psjh-epic::psjh-epic-ssl-helper-params
+parameters: 
+  -
+    name: http-profile
+    type: object
+    label: "Optional HTTP Profile for the SSL LB vServer and Service Group Configuration."
+    description: "Optionally provide the name of an HTTP Profile to bind to the SSL LB vServer and Service Group, or create a new one. May be needed for WebSocket support."
+    required: false
+    gui:
+      collapse_pane: true
+    parameters:
+      -
+        name: existing-httpprofile
+        label: HTTP Profile Name for WebSockets
+        description: "Name of an existing HTTP Profile to use for the configuration. Do not specify if you are adding a new HTTP Profile."
+        type: string
+        required: false
+      -
+        name: new-httpprofile
+        label: "Create new HTTP Profile for WebSockets"
+        description: "Create a new HTTP Profile to use for the configuration. Do not specify if you are providing an existing HTTP Profile."
+        type: psjh-epic::psjh-epic-httpprofile-helper-params
+        required: false
+        gui:
+          collapse_pane: true
+  -
+    name: intcnct-lb
+    label: "Interconnect - Web App Server Pool Configuration"
+    description: "List of Interconnect Web Application Server Pools. More than one pool of Interconnect servers can be configured."
+    type: psjh-epic::psjh-epic-intcnct-lb-helper-params[]
+substitutions:
+  new-profile: $parameters.http-profile.new-httpprofile.name
+  http-profile(existing-profile): if-then-else($existing-profile,$existing-profile,$substitutions.new-profile)
+components:      
+  -
+    name: ic-new-httpprofile
+    condition: $parameters.http-profile.new-httpprofile
+    type: psjh-epic::psjh-epic-httpprofile-helper-params
+    properties-default-sources:
+      - $parameters.http-profile.new-httpprofile
+  -
+    name: http-profile
+    condition: $parameters.http-profile.existing-httpprofile or $parameters.http-profile.new-httpprofile
+    type: string
+    properties:
+        name: $substitutions.http-profile($parameters.http-profile.existing-httpprofile)
+  -
+    name: cs-csvserver-comp
+    type: ns::csvserver
+    description: From NITRO StyleBook - creates csvserver object
+    properties:
+        name: str("cs_IC_%{$parameters.AppDescription}%_SSL")
+        servicetype: SSL
+        ipv46: $parameters.ip
+        port: 443
+        tcpprofilename?: $parameters.vserver-tcp-profile
+        httpprofilename?: $components.http-profile.properties.name
+        comment?: str("Interconnect SSL CS vServer Configuration - %{$parameters.AppDescription}%")
+    components: 
+      - 
+        name: sslvserver-sslprofile
+        type: ns::sslvserver
+        condition: $parameters.SSLProfile
+        properties:
+          sslprofile: $parameters.SSLProfile
+          vservername: $parent.properties.name
+      - 
+        name: vserver-certs-bindings
+        type: psjh-epic::psjh-vserver-certs-binds
+        condition: $parameters.certificates
+        properties:
+          certificates: $parameters.certificates
+          vserver-name: $parent.properties.name
+      - 
+        name: vserver-certs-bindings-existing
+        type: ns::sslvserver_sslcertkey_binding
+        condition: $parameters.certificates-existing
+        properties:
+          certkeyname: $parameters.certificates-existing
+          vservername: $parent.properties.name
+  -
+    name: intcnct-lb-comp
+    type: psjh-epic::psjh-epic-intcnct-lb-helper-params
+    condition: $parameters.intcnct-lb
+    repeat: $parameters.intcnct-lb
+    repeat-item: lb
+    repeat-index: ndx
+    properties-default-sources:
+      - $lb
+    properties:
+      intcnct-helper:
+        AppDescription: $parameters.AppDescription
+        cs-vserver-name: $components.cs-csvserver-comp.properties.name
+        httpprofilename?: $components.http-profile.properties.name
+        servicegroup-tcp-profile?: $parameters.servicegroup-tcp-profile

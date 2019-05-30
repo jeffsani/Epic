@@ -1,0 +1,84 @@
+name: psjh-epic-ic-hl7-tcp-lbvserver
+description: "Epic Interconnect Server HL7 TCP Load-Balancing - Customized for PSJH Epic StyleBooks."
+display-name: "Epic IC Server HL7 TCP LB vServer StyleBook"
+author: Nathan Joseph
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0"
+import-stylebooks:                       
+  -
+    namespace: netscaler.nitro.config    
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters-default-sources: 
+  - psjh-epic::psjh-epic-lb-helper-params
+parameters:
+  -
+    name: hl7-ports
+    type: tcp-port[]
+    label: List of TCP Ports for Interconnect HL7 Listeners
+    description: This is an array of TCP Ports utilized for this Interconnect HL7 TCP Listener configuration.
+    required: true
+components:
+  -
+    name: ic-hl7-server-members
+    type: ns::server
+    repeat: $parameters.svc-servers
+    repeat-item: server
+    repeat-condition: $server.add-server
+    properties:
+      name: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+      ipaddress: $server.ip
+  -
+    name: ic-hl7-lbvserver-comp
+    type: ns::lbvserver
+    repeat:
+      repeat-list: $parameters.hl7-ports
+      repeat-item: port
+    properties:
+        name: str("lb_IC_HL7_%{$parameters.AppDescription}%_TCP_%{$port}%")
+        servicetype: TCP
+        ipv46: $parameters.ip
+        port: $port
+        lbmethod: ROUNDROBIN
+        tcpprofilename?: $parameters.vserver-tcp-profile
+        comment: str("Interconnect HL7 TCP LB vServer Configuration - %{$parameters.AppDescription}%") 
+    components:
+      -
+        name: ic-hl7-servicegroup-comp
+        type: ns::servicegroup
+        properties:
+          servicegroupname: str("svcg_IC_HL7_%{$parameters.AppDescription}%_TCP_%{$port}%")
+          servicetype: TCP
+          downstateflush: DISABLED
+          sp: str("OFF")
+          useproxyport: str("YES")
+          monconnectionclose: str("RESET")
+          tcpprofilename?: $parameters.servicegroup-tcp-profile
+          comment?: str("Interconnect HL7 TCP LB Service Group Configuration - %{$parameters.AppDescription}%") 
+        components:
+          -
+            name: ic-hl7-lbvserver-svcg-binding
+            type: ns::lbvserver_servicegroup_binding
+            properties:
+              name: $parent.parent.properties.name
+              servicegroupname: $parent.properties.servicegroupname
+          - 
+            name: ic-hl7-svcg-ip-members
+            type: ns::servicegroup_servicegroupmember_binding
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            properties: 
+              servername: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              port: $port
+              servicegroupname: $parent.properties.servicegroupname
+          -
+            name: ic-hl7-monitor-svcg-binding-comp-new
+            type: ns::servicegroup_lbmonitor_binding
+            properties:
+              servicegroupname: $parent.properties.servicegroupname
+              monitor_name: str("tcp")
