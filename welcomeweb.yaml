@@ -1,0 +1,75 @@
+name: psjh-epic-welcomeweb-sslbridge-lbvserver
+description: "Epic WelcomeWeb Server SSL_BRIDGE Load-Balancing - Customized for PSJH Epic StyleBooks."
+display-name: "Epic WelcomeWeb SSL_BRIDGE LB vServer StyleBook"
+author: Nathan Joseph
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks: 
+  - 
+    namespace: netscaler.nitro.config
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters-default-sources:
+  - psjh-epic::psjh-epic-lb-helper-params
+components:
+  -
+    name: WelcomeWeb-lbvserver-comp
+    type: ns::lbvserver
+    properties:
+        name: str("lb_WelcomeWeb_%{$parameters.AppDescription}%_SSL_BRIDGE")
+        servicetype: SSL_BRIDGE
+        ipv46: $parameters.ip
+        port: 443
+        lbmethod: ROUNDROBIN
+        persistencetype: SOURCEIP
+        timeout: 20
+        tcpprofilename?: $parameters.vserver-tcp-profile
+        comment: str("WelcomeWeb SSL_BRIDGE LB vServer Configuration - %{$parameters.AppDescription}%") 
+    components:
+      -
+        name: WelcomeWeb-servicegroup-comp
+        type: ns::servicegroup
+        properties:
+          servicegroupname: str("svcg_WelcomeWeb_%{$parameters.AppDescription}%_SSL_BRIDGE")
+          servicetype: SSL_BRIDGE
+          downstateflush: DISABLED
+          sp: str("OFF")
+          useproxyport: str("YES")
+          tcpprofilename?: $parameters.servicegroup-tcp-profile
+          comment?: str("WelcomeWeb SSL_BRIDGE LB Service Group Configuration - %{$parameters.AppDescription}%") 
+        components:
+          -
+            name: WelcomeWeb-lbvserver-svcg-binding
+            type: ns::lbvserver_servicegroup_binding
+            properties:
+              name: $parent.parent.properties.name
+              servicegroupname: $parent.properties.servicegroupname
+          -
+            name: WelcomeWeb-server-members
+            type: ns::server
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            repeat-condition: $server.add-server
+            properties:
+              name: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              ipaddress: $server.ip
+          - 
+            name: WelcomeWeb-svcg-ip-members
+            type: ns::servicegroup_servicegroupmember_binding
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            properties: 
+              servername: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              port: 443
+              servicegroupname: $parent.properties.servicegroupname
+          -
+            name: WelcomeWeb-monitor-svcg-binding-comp
+            type: ns::servicegroup_lbmonitor_binding
+            properties:
+              servicegroupname: $parent.properties.servicegroupname
+              monitor_name: str("https-ecv")
