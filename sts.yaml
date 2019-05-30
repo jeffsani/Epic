@@ -1,0 +1,94 @@
+name: psjh-epic-sts-sslbridge-lbvserver
+description: "Epic Secure Token Service (STS) Server SSL_BRIDGE Load-Balancing - Customized for PSJH Epic StyleBooks."
+display-name: "Epic STS SSL_BRIDGE LB vServer StyleBook"
+author: Nathan Joseph
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks: 
+  - 
+    namespace: netscaler.nitro.config
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters-default-sources:
+  - psjh-epic::psjh-epic-lb-helper-params
+parameters: 
+  -
+    name: STSappName
+    label: Secure Token Service Web Application
+    description: "Provide the name of the Secure Token Service Web Application supported by this configuration."
+    type: string
+    required: true
+components:
+  -
+    name: STS-lbvserver-comp
+    type: ns::lbvserver
+    properties:
+        name: str("lb_STS_%{$parameters.AppDescription}%_SSL_BRIDGE")
+        servicetype: SSL_BRIDGE
+        ipv46: $parameters.ip
+        port: 443
+        lbmethod: ROUNDROBIN
+        persistencetype: NONE
+        tcpprofilename?: $parameters.vserver-tcp-profile
+        comment: str("STS Server SSL_BRIDGE LB vServer Configuration - %{$parameters.AppDescription}%") 
+    components:
+      -
+        name: STS-servicegroup-comp
+        type: ns::servicegroup
+        properties:
+          servicegroupname: str("svcg_STS_%{$parameters.AppDescription}%_SSL_BRIDGE")
+          servicetype: SSL_BRIDGE
+          downstateflush: DISABLED
+          sp: str("OFF")
+          useproxyport: str("YES")
+          tcpprofilename?: $parameters.servicegroup-tcp-profile
+          comment?: str("STS Server SSL_BRIDGE LB Service Group Configuration - %{$parameters.AppDescription}%") 
+        components:
+          -
+            name: STS-lbvserver-svcg-binding
+            type: ns::lbvserver_servicegroup_binding
+            properties:
+              name: $parent.parent.properties.name
+              servicegroupname: $parent.properties.servicegroupname
+          -
+            name: STS-server-members
+            type: ns::server
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            repeat-condition: $server.add-server
+            properties:
+              name: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              ipaddress: $server.ip
+          - 
+            name: STS-svcg-ip-members
+            type: ns::servicegroup_servicegroupmember_binding
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            properties: 
+              servername: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              port: 443
+              servicegroupname: $parent.properties.servicegroupname
+  -
+    name: STS-monitor-comp
+    type: ns::lbmonitor
+    properties:
+      monitorname: str("mon_STS_%{$parameters.AppDescription}%_HTTP")
+      type: HTTP
+      httprequest: str("HEAD /%{$parameters.STSappName}%/home.aspx")
+      respcode: [str("200")]
+      secure: str("YES")
+      interval: 30
+      resptimeout: 10  
+      retries: 3
+    components:
+      -
+        name: bi-monitor-svcg-binding-comp-new
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: $components.STS-lbvserver-comp.components.STS-servicegroup-comp.properties.servicegroupname
+          monitor_name: $parent.properties.monitorname

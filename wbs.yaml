@@ -1,0 +1,95 @@
+name: psjh-epic-wbs-sslbridge-lbvserver
+description: "Epic WebBLOB Service Server SSL_BRIDGE Load-Balancing - Customized for PSJH Epic StyleBooks."
+display-name: "Epic WBS Server SSL_BRIDGE LB vServer StyleBook"
+author: Nathan Joseph
+namespace: com.psjh.epic.stylebooks
+schema-version: "1.0" 
+version: "1.0" 
+import-stylebooks: 
+  - 
+    namespace: netscaler.nitro.config
+    prefix: ns
+    version: "11.1"
+  - 
+    namespace: com.psjh.epic.stylebooks
+    prefix: psjh-epic
+    version: "1.0"
+parameters-default-sources:
+  - psjh-epic::psjh-epic-lb-helper-params
+  - psjh-epic::psjh-epic-wbs-helper-params
+substitutions:
+  wbs-send:
+    true: str("GET /%{$parameters.WBSapp}%/Health?env=%{$parameters.WBSenv}%")
+    false: str("GET /%{$parameters.WBSapp}%/ACWebBlobService.ashx?env=%{$parameters.WBSenv}%")
+  wbs-recv:
+    true: str("OK-WBS")
+    false: str("%{$parameters.WBSenv}%, is configured correctly")
+components:
+  -
+    name: wbs-lbvserver-comp
+    type: ns::lbvserver
+    properties:
+        name: str("lb_WBS_%{$parameters.WBSapp}%_%{$parameters.WBSenv}%_%{$parameters.AppDescription}%_SSL_BRIDGE")
+        servicetype: SSL_BRIDGE
+        ipv46: $parameters.ip
+        port: 443
+        lbmethod: ROUNDROBIN
+        persistencetype: NONE
+        tcpprofilename?: $parameters.vserver-tcp-profile
+        comment: str("WBS SSL_BRIDGE LB vServer Configuration - %{$parameters.AppDescription}%") 
+    components:
+      -
+        name: wbs-servicegroup-comp
+        type: ns::servicegroup
+        properties:
+          servicegroupname: str("svcg_WBS_%{$parameters.WBSapp}%_%{$parameters.WBSenv}%_%{$parameters.AppDescription}%_SSL_BRIDGE")
+          servicetype: SSL_BRIDGE
+          downstateflush: DISABLED
+          sp: str("OFF")
+          useproxyport: str("YES")
+          tcpprofilename?: $parameters.servicegroup-tcp-profile
+          comment?: str("WBS SSL_BRIDGE LB Service Group Configuration - %{$parameters.AppDescription}%") 
+        components:
+          -
+            name: wbs-lbvserver-svcg-binding
+            type: ns::lbvserver_servicegroup_binding
+            properties:
+              name: $parent.parent.properties.name
+              servicegroupname: $parent.properties.servicegroupname
+          -
+            name: wbs-server-members
+            type: ns::server
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            repeat-condition: $server.add-server
+            properties:
+              name: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              ipaddress: $server.ip
+          - 
+            name: wbs-svcg-ip-members
+            type: ns::servicegroup_servicegroupmember_binding
+            repeat: $parameters.svc-servers
+            repeat-item: server
+            properties: 
+              servername: str("srv_%{$server.svc-name}%_%{$server.ip}%")
+              port: 443
+              servicegroupname: $parent.properties.servicegroupname
+  -
+    name: wbs-monitor-comp
+    type: ns::lbmonitor
+    properties:
+      monitorname: str("mon_WBS_%{$parameters.AppDescription}%_HTTP-ECV")
+      type: HTTP-ECV
+      send: $substitutions.wbs-send[$parameters.WBSmonitorVersion]
+      recv: $substitutions.wbs-recv[$parameters.WBSmonitorVersion]
+      secure: str("YES")
+      interval: 30
+      resptimeout: 10
+      retries: 3
+    components:
+      -
+        name: wbs-monitor-svcg-binding-comp-new
+        type: ns::servicegroup_lbmonitor_binding
+        properties:
+          servicegroupname: $components.wbs-lbvserver-comp.components.wbs-servicegroup-comp.properties.servicegroupname
+          monitor_name: $parent.properties.monitorname
